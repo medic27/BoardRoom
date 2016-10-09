@@ -52,8 +52,9 @@ class RoomView extends React.Component {
     }
   }
 
-
   componentDidMount() {
+    this.mountVideo();
+
     const canvas = document.getElementById('canvass');
     const ctx = canvas.getContext('2d');
     this.setState({
@@ -140,6 +141,23 @@ class RoomView extends React.Component {
     const msgObj = { type: 'message', username, message };
     document.getElementById('textSubmit').value = '';
     this.state.channel.send(JSON.stringify(msgObj));
+  }
+
+  mountVideo() {
+    const constraints = { video: true };
+
+    function successCallback(localMediaStream) {
+      window.stream = localMediaStream; // stream available to console
+      const video = document.querySelector('#video');
+      video.src = window.URL.createObjectURL(localMediaStream);
+      video.play();
+    }
+
+    function errorCallback(error) {
+      console.log('navigator.getUserMedia error: ', error);
+    }
+
+    navigator.getUserMedia(constraints, successCallback, errorCallback);
   }
 
   sendDrawData(drawData) {

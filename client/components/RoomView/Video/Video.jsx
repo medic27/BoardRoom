@@ -1,4 +1,4 @@
 import React from 'react';
 
 export default () =>
-  <video autoPlay />;
+  <video autoPlay id="video" />;
