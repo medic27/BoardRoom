@@ -23,6 +23,8 @@ class RoomView extends React.Component {
     this.widthChanged = this.widthChanged.bind(this);
     this.drawTypeChanged = this.drawTypeChanged.bind(this);
 
+    this.clearCanvas = this.clearCanvas.bind(this);
+
     this.state = {
       peerConnection: null,
       channel: null,
@@ -81,7 +83,7 @@ class RoomView extends React.Component {
   onChatMessageSubmit(text) {
     const username = store.getState().getIn(['userData', 'username']);
     store.dispatch(actions.addMessage(username, text));
-    this.sendMessage(username, text);
+    if (this.state.channel) this.sendMessage(username, text);
   }
 
   initiateRTC(peerConnection, roomName) {
@@ -123,7 +125,9 @@ class RoomView extends React.Component {
     if (msgObj.type === 'message') {
       store.dispatch(actions.addMessage(msgObj.username, msgObj.message));
     } else if (msgObj.type === 'canvas') {
-      if (msgObj.drawType !== 'erase') {
+      if (msgObj.drawType === 'clearCanvas') {
+        this.state.ctx.clearRect(0, 0, this.state.canvas.width, this.state.canvas.height);
+      } else if (msgObj.drawType !== 'erase') {
         this.drawOnCanvas(msgObj.prevX, msgObj.prevY, msgObj.x, msgObj.y, msgObj.strokeStyle, msgObj.lineWidth);
       } else {
         this.erase(msgObj.prevX, msgObj.prevY, msgObj.x, msgObj.y, msgObj.lineWidth);
@@ -238,6 +242,11 @@ class RoomView extends React.Component {
     });
   }
 
+  clearCanvas() {
+    this.state.ctx.clearRect(0, 0, this.state.canvas.width, this.state.canvas.height);
+    this.state.channel.send(JSON.stringify({ type: 'canvas', drawType: 'clearCanvas' }));
+  }
+
   render() {
     return (
       <main className="room-view">
@@ -259,6 +268,8 @@ class RoomView extends React.Component {
             strokeChanged={this.strokeChanged}
             widthChanged={this.widthChanged}
             drawTypeChanged={this.drawTypeChanged}
+
+            clearCanvas={this.clearCanvas}
           />
 
           <div id="chat-video">

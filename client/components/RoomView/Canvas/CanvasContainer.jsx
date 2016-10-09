@@ -21,6 +21,8 @@ export default props =>
       strokeChanged={props.strokeChanged}
       widthChanged={props.widthChanged}
       drawTypeChanged={props.drawTypeChanged}
+
+      clearCanvas={props.clearCanvas}
     />
 
   </div>;
