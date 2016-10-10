@@ -129,10 +129,10 @@ class RoomView extends React.Component {
     } else if (msgObj.type === 'canvas') {
       if (msgObj.drawType === 'clearCanvas') {
         this.state.ctx.clearRect(0, 0, this.state.canvas.width, this.state.canvas.height);
-      } else if (msgObj.drawType !== 'erase') {
-        this.drawOnCanvas(msgObj.prevX, msgObj.prevY, msgObj.x, msgObj.y, msgObj.strokeStyle, msgObj.lineWidth);
-      } else {
+      } else if (msgObj.drawType === 'erase') {
         this.erase(msgObj.prevX, msgObj.prevY, msgObj.x, msgObj.y, msgObj.lineWidth);
+      } else {
+        this.drawOnCanvas(msgObj.prevX, msgObj.prevY, msgObj.x, msgObj.y, msgObj.strokeStyle, msgObj.lineWidth);
       }
     }
   }
@@ -169,7 +169,6 @@ class RoomView extends React.Component {
     const rect = this.state.canvas.getBoundingClientRect();
     const prevX = e.pageX - rect.left - document.body.scrollLeft;
     const prevY = e.pageY - rect.top - document.body.scrollTop;
-    const ctx = this.state.ctx;
 
     const drawState = {
       type: 'canvas',
