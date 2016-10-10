@@ -4,6 +4,7 @@ import ChatContainer from './Chat/ChatContainer';
 import CanvasContainer from './Canvas/CanvasContainer';
 import VideoContainer from './Video/VideoContainer';
 import RTC from './../../rtc-controller.js';
+import NavigationContainer from '../Navigation/NavigationContainer.jsx';
 
 import store from '../../store';
 import actions from '../../actions';
@@ -170,10 +171,23 @@ class RoomView extends React.Component {
     const prevY = e.pageY - rect.top - document.body.scrollTop;
     const ctx = this.state.ctx;
 
+    const drawState = {
+      type: 'canvas',
+      drawType: this.state.drawType,
+      prevX,
+      prevY,
+      x: prevX,
+      y: prevY,
+      strokeStyle: this.state.strokeStyle,
+      lineWidth: this.state.lineWidth,
+    };
+
+    if (this.state.channel) this.sendDrawData(drawState);
+
     if (this.props.drawType === 'erase') {
-      this.erase(prevX, prevY, prevX, prevY, ctx.lineWidth);
+      this.erase(prevX, prevY, prevX, prevY, this.state.lineWidth);
     } else {
-      this.drawOnCanvas(prevX, prevY, prevX, prevY, ctx.strokeStyle, ctx.lineWidth);
+      this.drawOnCanvas(prevX, prevY, prevX, prevY, this.state.strokeStyle, this.state.lineWidth);
     }
     this.setState({
       rect,
@@ -237,6 +251,8 @@ class RoomView extends React.Component {
   }
 
   endDraw() {
+    // const data = this.state.ctx.getImageData(0, 0, this.state.canvas.width, this.state.canvas.height);
+    // console.log(data);
     this.setState({
       mouseDown: false,
     });
@@ -268,6 +284,7 @@ class RoomView extends React.Component {
   render() {
     return (
       <main className="room-view">
+        <NavigationContainer history={this.props.history} />
         <div id="room-banner">
           <h1>Boardroom</h1>
           <h2>You are in room {store.getState().get('room').get('name') }</h2>
