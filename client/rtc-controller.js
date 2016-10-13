@@ -71,6 +71,7 @@ export default {
       peerConnection.createAnswer(
         (sessionDescription) => {
           console.log('created answer');
+          console.log(sessionDescription);
           peerConnection.setLocalDescription(sessionDescription);
           socket.emit('answer', sessionDescription, roomName);
           resolve(sessionDescription);

@@ -54,8 +54,6 @@ class RoomView extends React.Component {
   }
 
   componentDidMount() {
-    this.mountVideo();
-
     const canvas = document.getElementById('canvass');
     const ctx = canvas.getContext('2d');
     this.setState({
@@ -69,13 +67,14 @@ class RoomView extends React.Component {
     const peerConnection = RTC.createConnection(socket, roomName);
     RTC.acceptRemoteICECandidates(socket, peerConnection);
 
-    if (RTC.isInitiator) {
-      this.initiateRTC(peerConnection, roomName);
-      console.log('You are the initiator!');
-    } else {
-      this.listenForRTC(peerConnection, roomName);
-    }
-    //document.getElementById('chat-window').scrollTop = document.getElementById('chat-window').scrollHeight;
+    this.mountVideo(peerConnection).then(() => {
+      if (RTC.isInitiator) {
+        this.initiateRTC(peerConnection, roomName);
+        console.log('You are the initiator!');
+      } else {
+        this.listenForRTC(peerConnection, roomName);
+      }
+    });
   }
 
   componentDidUpdate() {
@@ -90,7 +89,8 @@ class RoomView extends React.Component {
 
   initiateRTC(peerConnection, roomName) {
     const sendChannel = RTC.createDataChannel(peerConnection);
-    RTC.createOffer(socket, peerConnection, roomName);
+    const offer = RTC.createOffer(socket, peerConnection, roomName);
+    console.log('created offer:', offer);
 
     sendChannel.onopen = () => {
       sendChannel.onmessage = (message) => {
@@ -100,7 +100,7 @@ class RoomView extends React.Component {
       this.setState({ channel: sendChannel });
       console.log('sendchannel state set');
     };
-
+    // what is the purpose of setting state here?
     this.setState({ peerConnection });
   }
 
@@ -137,28 +137,41 @@ class RoomView extends React.Component {
     }
   }
 
-  sendMessage(username, message) {
-    // Only strings can be sent through the data channel
-    const msgObj = { type: 'message', username, message };
-    document.getElementById('textSubmit').value = '';
-    this.state.channel.send(JSON.stringify(msgObj));
-  }
-
-  mountVideo() {
+  mountVideo(peerConnection) {
+    console.log('mountVideo invoked');
     const constraints = { video: true };
 
     function successCallback(localMediaStream) {
-      window.stream = localMediaStream; // stream available to console
-      const video = document.querySelector('#video');
-      video.src = window.URL.createObjectURL(localMediaStream);
-      video.play();
+      return new Promise((resolve, reject) => {
+        window.stream = localMediaStream; // stream available to console
+        const localVideo = document.querySelector('#localVideo');
+        const remoteVideo = document.querySelector('#remoteVideo');
+        localVideo.src = window.URL.createObjectURL(localMediaStream);
+        localVideo.play();
+        peerConnection.addStream(localMediaStream);
+
+        console.log('track added');
+
+        peerConnection.onaddstream = function (evt) {
+          console.log('onaddstream event fire');
+          remoteVideo.src = URL.createObjectURL(evt.stream);
+        };
+        resolve();
+      });
     }
 
     function errorCallback(error) {
       console.log('navigator.getUserMedia error: ', error);
     }
 
-    navigator.getUserMedia(constraints, successCallback, errorCallback);
+    return navigator.mediaDevices.getUserMedia(constraints).then(successCallback).catch(errorCallback);
+  }
+
+  sendMessage(username, message) {
+    // Only strings can be sent through the data channel
+    const msgObj = { type: 'message', username, message };
+    document.getElementById('textSubmit').value = '';
+    this.state.channel.send(JSON.stringify(msgObj));
   }
 
   sendDrawData(drawData) {

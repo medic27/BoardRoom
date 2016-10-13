@@ -1,5 +1,9 @@
 import React from 'react';
-import Video from './Video.jsx';
+import RemoteVideo from './RemoteVideo.jsx';
+import LocalVideo from './LocalVideo.jsx';
 
 export default () =>
-  <Video />;
+  <div>
+    <RemoteVideo />
+    <LocalVideo />
+  </div>;
