@@ -1,39 +1,56 @@
-//const https = require('https');
-const http = require('http');
-const fs = require('fs');
+const https = require('https');
+// const http = require('http');
 const path = require('path');
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const { createSignalingChannel } = require('./signaling.js');
+const fs = require('fs');
 
+let PORT = process.env.PORT || 8080;
 
-//const config = require('./config/config.js');
-
-const PORT = process.env.PORT || 8080;
+if (process.env.NODE_ENV === 'test') PORT = 7000;
 
 const userController = require('./controllers/user-controller');
+const roomController = require('./controllers/room-controller');
 
-const app = express();
-console.log("database location:", process.env.DATABASE_LOCATION);
-mongoose.connect(process.env.DATABASE_LOCATION);
+let dbPath;
+if (process.env.DATABASE_LOCATION) {
+  dbPath = process.env.DATABASE_LOCATION;
+} else if (process.env.NODE_ENV === 'test') {
+  dbPath = 'mongodb://jc:zhang@ds139715.mlab.com:39715/draw-together-test';
+} else {
+  dbPath = 'mongodb://dking:helloworld@ds061325.mlab.com:61325/draw-together-development';
+}
+
+if (!mongoose.connection.host) mongoose.connect(dbPath);
+
 const db = mongoose.connection;
 
-db.on('error', console.error.bind(console, 'connection error:'));
-db.once('open', () => {
-  console.log('mongoose connected to server');
+// For testing purposes, this promise will be
+// exported so that we can avoid making requests
+// to the database before it is open.
+const dbOpen = new Promise((resolve, reject) => {
+  db.on('error', console.error.bind(console, 'connection error:'));
+  db.once('open', () => {
+    console.log('mongoose connected to server');
+    resolve();
+  });
 });
+
+const app = express();
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// const options = {
-//   key: fs.readFileSync(path.join(`${__dirname}/config/server.key`), 'utf-8'),
-//   cert: fs.readFileSync(path.join(`${__dirname}/config/server.crt`), 'utf-8'),
-//   passphrase: 'boardroom',
-// };
+const options = {
+  key: fs.readFileSync(path.join(`${__dirname}/config/server.key`), 'utf-8'),
+  cert: fs.readFileSync(path.join(`${__dirname}/config/server.crt`), 'utf-8'),
+  passphrase: 'boardroom',
+};
 
-const server = http.createServer(app);
+const server = https.createServer(options, app);
+// const server = http.createServer(app);
 
 const io = require('socket.io')(server);
 
@@ -62,12 +79,46 @@ app.post('/login',
   }
 );
 
+app.post('/create',
+  roomController.createRoom,
+  (req, res) => {
+    res.send(req.locals);
+  }
+);
+
+app.post('/join',
+  roomController.verifyRoom,
+  (req, res) => {
+    res.send(req.locals);
+  }
+);
+
 
 io.on('connection', (socket) => {
-  console.log('a user connected');
+  socket.on('save message', (msgData) => {
+    roomController.saveMessage(msgData);
+  });
+
+  socket.on('get messages', (roomName) => {
+    roomController.getMessages(roomName)
+      .then((messages) => {
+        socket.emit('messages', { messages });
+      });
+  });
+
+  socket.on('save canvas', (blob) => {
+    // fs.writeFileSync(path.join(__dirname, 'tempo/test'), blob.toString('64'));
+    roomController.saveCanvas(blob);
+  });
+
+  socket.on('get canvas', (roomName) => {
+    roomController.getCanvas(roomName)
+      .then((canvas) => {
+        socket.emit('send canvas', { canvas });
+      });
+  });
 
   socket.on('disconnect', () => {
-    console.log('a user disconnected');
   });
 });
 
@@ -80,3 +131,5 @@ app.use(express.static(path.join(`${__dirname}/..`)));
 app.get('/', (req, res) => {
   res.sendFile(path.join(`${__dirname}/../index.html`));
 });
+
+module.exports = { app, db, dbOpen };

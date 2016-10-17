@@ -43,9 +43,11 @@ const userController = {
             };
             next();
           } else {
-            res.send('incorrect password');
+            res.status(400).send(false);
           }
         });
+      } else {
+        res.status(400).send(false);
       }
     });
   },

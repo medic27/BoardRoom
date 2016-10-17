@@ -23,6 +23,7 @@ class RoomView extends React.Component {
     this.strokeChanged = this.strokeChanged.bind(this);
     this.widthChanged = this.widthChanged.bind(this);
     this.drawTypeChanged = this.drawTypeChanged.bind(this);
+    this.clearCanvas = this.clearCanvas.bind(this);
 
     this.clearCanvas = this.clearCanvas.bind(this);
 
@@ -61,24 +62,55 @@ class RoomView extends React.Component {
       ctx,
     });
 
+    socket.emit('get canvas', { roomName: this.props.roomName });
+    socket.on('send canvas', (data) => {
+      const blob = data.canvas;
+      if (blob) {
+        const newBlob = new Blob([blob], { type: 'image/png' });
+        const image = new Image();
+        image.addEventListener('load', () => {
+          this.state.ctx.drawImage(image, 0, 0, 2000, 2000);
+        });
+        image.src = URL.createObjectURL(newBlob);
+      }
+    });
+
     // RTC stuff
     const roomName = this.props.roomName;
 
     const peerConnection = RTC.createConnection(socket, roomName);
     RTC.acceptRemoteICECandidates(socket, peerConnection);
 
+    /* STARTS VIDEO STREAM
     this.mountVideo(peerConnection).then(() => {
       if (RTC.isInitiator) {
         this.initiateRTC(peerConnection, roomName);
         console.log('You are the initiator!');
       } else {
         this.listenForRTC(peerConnection, roomName);
+    */
+
+    if (RTC.isInitiator) {
+      this.initiateRTC(peerConnection, roomName);
+      // You are the initiator
+    } else {
+      this.listenForRTC(peerConnection, roomName);
+    }
+
+    // GET CURRENT MESSAGES FROM REDUX STORE
+    socket.emit('get messages', { roomName: this.props.roomName });
+    socket.on('messages', (messages) => {
+      const msgs = messages.messages;
+      for (let i = 0; i < msgs.length; i += 1) {
+        const message = JSON.parse(msgs[i]);
+        store.dispatch(actions.addMessage(message.username, message.message));
       }
     });
   }
 
   componentDidUpdate() {
-    document.getElementById('chat-window').scrollTop = document.getElementById('chat-window').scrollHeight;
+    const chat = document.getElementById('chat-window');
+    chat.scrollTop = chat.scrollHeight;
   }
 
   onChatMessageSubmit(text) {
@@ -98,7 +130,7 @@ class RoomView extends React.Component {
       };
 
       this.setState({ channel: sendChannel });
-      console.log('sendchannel state set');
+      // sendchannel state set
     };
     // what is the purpose of setting state here?
     this.setState({ peerConnection });
@@ -106,19 +138,19 @@ class RoomView extends React.Component {
 
 
   listenForRTC(peerConnection, roomName) {
-    RTC.listenForRemoteOffer(socket, peerConnection, roomName);
-
-    peerConnection.ondatachannel = (event) => {
+    const thisPC = peerConnection;
+    RTC.listenForRemoteOffer(socket, thisPC, roomName);
+    thisPC.ondatachannel = (event) => {
       const dataChannel = event.channel;
       dataChannel.onmessage = (message) => {
         this.handleRTCData(message);
       };
 
       this.setState({ channel: dataChannel });
-      console.log('datachannel state set');
+      // datachannel state set
     };
 
-    this.setState({ peerConnection });
+    this.setState({ thisPC });
   }
 
   handleRTCData(message) {
@@ -131,8 +163,22 @@ class RoomView extends React.Component {
         this.state.ctx.clearRect(0, 0, this.state.canvas.width, this.state.canvas.height);
       } else if (msgObj.drawType === 'erase') {
         this.erase(msgObj.prevX, msgObj.prevY, msgObj.x, msgObj.y, msgObj.lineWidth);
+    /* CHECK IF THIS IS NEEDED
+      if (msgObj.drawType === 'erase') {
+        this.erase(
+          msgObj.prevX,
+          msgObj.prevY,
+          msgObj.x,
+          msgObj.y,
+          msgObj.lineWidth);
+    */
       } else {
-        this.drawOnCanvas(msgObj.prevX, msgObj.prevY, msgObj.x, msgObj.y, msgObj.strokeStyle, msgObj.lineWidth);
+        this.drawOnCanvas(msgObj.prevX,
+          msgObj.prevY,
+          msgObj.x,
+          msgObj.y,
+          msgObj.strokeStyle,
+          msgObj.lineWidth);
       }
     }
   }
@@ -171,6 +217,10 @@ class RoomView extends React.Component {
     // Only strings can be sent through the data channel
     const msgObj = { type: 'message', username, message };
     document.getElementById('textSubmit').value = '';
+    socket.emit('save message', {
+      messageInfo: JSON.stringify(msgObj),
+      room: this.props.roomName,
+    });
     this.state.channel.send(JSON.stringify(msgObj));
   }
 
@@ -197,9 +247,20 @@ class RoomView extends React.Component {
     if (this.state.channel) this.sendDrawData(drawState);
 
     if (this.props.drawType === 'erase') {
-      this.erase(prevX, prevY, prevX, prevY, this.state.lineWidth);
+      this.erase(
+        prevX,
+        prevY,
+        prevX,
+        prevY,
+        this.state.lineWidth);
     } else {
-      this.drawOnCanvas(prevX, prevY, prevX, prevY, this.state.strokeStyle, this.state.lineWidth);
+      this.drawOnCanvas(
+        prevX,
+        prevY,
+        prevX,
+        prevY,
+        this.state.strokeStyle,
+        this.state.lineWidth);
     }
     this.setState({
       rect,
@@ -263,11 +324,21 @@ class RoomView extends React.Component {
   }
 
   endDraw() {
-    // const data = this.state.ctx.getImageData(0, 0, this.state.canvas.width, this.state.canvas.height);
-    // console.log(data);
+    this.state.canvas.toBlob((blob) => {
+      socket.emit('save canvas', { blob, roomName: this.props.roomName });
+    });
     this.setState({
       mouseDown: false,
     });
+  }
+
+  clearCanvas() {
+    this.state.ctx.clearRect(
+      0,
+      0,
+      this.state.canvas.width,
+      this.state.canvas.height
+    );
   }
 
   strokeChanged(e) {
@@ -299,7 +370,7 @@ class RoomView extends React.Component {
         <NavigationContainer history={this.props.history} />
         <div id="room-banner">
           <h1>Boardroom</h1>
-          <h2>You are in room {store.getState().get('room').get('name') }</h2>
+          <h2>You are in room {store.getState().get('room').get('name')}</h2>
         </div>
         <div id="room">
 
